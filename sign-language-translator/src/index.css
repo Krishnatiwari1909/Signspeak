@@ -1,0 +1,57 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: ui-rounded, "SF Pro Rounded", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+
+  /* Dusk blues for surfaces, caption yellow for anything the person has signed. */
+  --color-dusk-950: #0e1126;
+  --color-dusk-900: #151a36;
+  --color-dusk-800: #1f2649;
+  --color-dusk-700: #2f3868;
+  --color-mist: #eaedfb;
+  --color-mist-dim: #a2abd6;
+  --color-caption: #ffd84d;
+  --color-hand: #7fd8ff;
+  --color-ok: #6ee7a8;
+  --color-warn: #ffb56b;
+  --color-bad: #ff8a97;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  background: var(--color-dusk-950);
+  color: var(--color-mist);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-caption);
+  outline-offset: 2px;
+}
+
+/* The one non-user-triggered motion: a caption rises in when a sign is recognized,
+   holds, then fades. */
+@keyframes caption-in {
+  0% { opacity: 0; transform: translateY(8px) scale(0.98); }
+  10% { opacity: 1; transform: none; }
+  80% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.caption-pop {
+  animation: caption-in 3s ease-out forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @keyframes caption-in {
+    0% { opacity: 0; }
+    10% { opacity: 1; }
+    80% { opacity: 1; }
+    100% { opacity: 0; }
+  }
+}
