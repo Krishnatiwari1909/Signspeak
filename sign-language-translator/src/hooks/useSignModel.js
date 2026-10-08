@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { initBackend, loadLabels, loadSignModel, warmUp } from '../lib/model.js'
 
 /**
- * Loads TensorFlow.js, the label list and the sign model (trained if present, else the
- * placeholder). The model and labels live in refs for the render loop.
+ * Initializes the backend, loads the label list, and loads the standard .json 
+ * sign model. The model and labels live in refs for the render loop.
  */
 export function useSignModel() {
   const modelRef = useRef(null)
@@ -23,14 +23,14 @@ export function useSignModel() {
         await warmUp(model)
 
         if (cancelled) {
-          model.dispose()
+          // model.dispose()
           return
         }
         modelRef.current = model
         labelsRef.current = labels
         setState({ status: 'ready', source: loaded.source, backend, error: '' })
       } catch (err) {
-        model?.dispose()
+        // model?.dispose()
         if (cancelled) return
         console.error('Sign model init failed:', err)
         setState({

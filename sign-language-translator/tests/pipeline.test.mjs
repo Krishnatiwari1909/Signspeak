@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { FEATURE_DIM, FEATURES_PER_HAND, LANDMARKS_PER_HAND, WINDOW_SIZE } from '../src/config.js'
+import { FEATURE_DIM, NUM_LANDMARKS, WINDOW_SIZE } from '../src/config.js'
 import { encodeFrame } from '../src/lib/features.js'
 import { FrameBuffer } from '../src/lib/FrameBuffer.js'
 import { createPredictionGate } from '../src/lib/predictionGate.js'
@@ -8,16 +8,13 @@ import { argmax, prettyLabel, topK } from '../src/lib/predictions.js'
 
 /* ---------- helpers ---------- */
 
-// A fake hand: wrist at (wx, 0.5), every landmark stacked upward, middle MCP (index 9) exactly
-// 0.1 above the wrist, so the hand-size scale is 0.1 when aspect = 1.
-function makeHand(wx) {
+function makeLandmarks(count, offset = 0) {
   const landmarks = []
-  for (let i = 0; i < LANDMARKS_PER_HAND; i++) {
-    landmarks.push({ x: wx, y: 0.5 - (i === 0 ? 0 : 0.1), z: 0 })
+  for (let i = 0; i < count; i++) {
+    landmarks.push({ x: 0.5 + offset, y: 0.5 + offset, z: 0.0 + offset })
   }
   return landmarks
 }
-const category = (categoryName) => [{ categoryName }]
 
 /* ---------- FrameBuffer ---------- */
 
@@ -61,74 +58,44 @@ test('FrameBuffer.clear empties the window', () => {
 /* ---------- feature encoding ---------- */
 
 test('feature dimensions are consistent', () => {
-  assert.equal(FEATURES_PER_HAND, 65)
-  assert.equal(FEATURE_DIM, 130)
+  assert.equal(NUM_LANDMARKS, 135)
+  assert.equal(FEATURE_DIM, 405)
   assert.equal(WINDOW_SIZE, 30)
 })
 
 test('encodeFrame returns 0 and zeros when no hands are visible', () => {
   const out = new Float32Array(FEATURE_DIM).fill(9)
-  assert.equal(encodeFrame({ landmarks: [] }, out), 0)
+  assert.equal(encodeFrame({}, out), 0)
   assert.ok(out.every((v) => v === 0))
 })
 
-test('encodeFrame normalizes shape by hand size and keeps wrist position', () => {
+test('encodeFrame centers landmarks around the shoulders', () => {
   const out = new Float32Array(FEATURE_DIM)
-  const n = encodeFrame({ landmarks: [makeHand(0.3)], handedness: [category('Left')] }, out, 1)
-  assert.equal(n, 1)
-  // Landmark 9 sits 0.1 above the wrist -> normalized y = -1 (up is negative y)
-  assert.ok(Math.abs(out[9 * 3 + 1] - -1) < 1e-6)
-  assert.equal(out[0], 0) // wrist is the origin
-  // Wrist position appended after the 63 shape values
-  assert.ok(Math.abs(out[63] - 0.3) < 1e-6)
-  assert.ok(Math.abs(out[64] - 0.5) < 1e-6)
-  // The other hand slot stays empty
-  assert.ok(out.slice(FEATURES_PER_HAND).every((v) => v === 0))
-})
+  const pose = makeLandmarks(33)
+  // Shift shoulders to 0.6, 0.6
+  pose[11] = { x: 0.6, y: 0.6, z: 0.0 }
+  pose[12] = { x: 0.6, y: 0.6, z: 0.0 }
 
-test('encodeFrame puts a Right hand in slot 1', () => {
-  const out = new Float32Array(FEATURE_DIM)
-  encodeFrame({ landmarks: [makeHand(0.6)], handedness: [category('Right')] }, out, 1)
-  assert.ok(out.slice(0, FEATURES_PER_HAND).every((v) => v === 0))
-  assert.ok(Math.abs(out[FEATURES_PER_HAND + 63] - 0.6) < 1e-6)
-})
+  const lHand = makeLandmarks(21, 0.2) // x=0.7
+  const rHand = makeLandmarks(21, -0.2) // x=0.3
+  const face = makeLandmarks(60, 0) // x=0.5
 
-test('encodeFrame accepts the older `handednesses` key', () => {
-  const out = new Float32Array(FEATURE_DIM)
-  encodeFrame({ landmarks: [makeHand(0.6)], handednesses: [category('Right')] }, out, 1)
-  assert.ok(Math.abs(out[FEATURES_PER_HAND + 63] - 0.6) < 1e-6)
-})
-
-test('encodeFrame orders two same-labelled hands by screen position', () => {
-  const out = new Float32Array(FEATURE_DIM)
-  const n = encodeFrame(
-    { landmarks: [makeHand(0.8), makeHand(0.2)], handedness: [category('Right'), category('Right')] },
-    out,
-    1
+  const handsCount = encodeFrame(
+    {
+      poseLandmarks: pose,
+      leftHandLandmarks: lHand,
+      rightHandLandmarks: rHand,
+      faceLandmarks: face,
+    },
+    out
   )
-  assert.equal(n, 2)
-  assert.ok(Math.abs(out[63] - 0.2) < 1e-6) // slot 0 = the hand further left on screen
-  assert.ok(Math.abs(out[FEATURES_PER_HAND + 63] - 0.8) < 1e-6)
-})
 
-test('encodeFrame uses distinct handedness labels for two hands', () => {
-  const out = new Float32Array(FEATURE_DIM)
-  encodeFrame(
-    { landmarks: [makeHand(0.8), makeHand(0.2)], handedness: [category('Left'), category('Right')] },
-    out,
-    1
-  )
-  assert.ok(Math.abs(out[63] - 0.8) < 1e-6) // Left hand -> slot 0, wherever it is
-  assert.ok(Math.abs(out[FEATURES_PER_HAND + 63] - 0.2) < 1e-6)
-})
+  assert.equal(handsCount, 2)
 
-test('encodeFrame corrects x for the aspect ratio when measuring hand size', () => {
-  // Middle MCP offset purely in x by 0.1; with aspect 2 the real size is 0.2, so it normalizes to 1.
-  const hand = makeHand(0.5)
-  hand[9] = { x: 0.6, y: 0.5, z: 0 }
-  const out = new Float32Array(FEATURE_DIM)
-  encodeFrame({ landmarks: [hand], handedness: [category('Left')] }, out, 2)
-  assert.ok(Math.abs(out[9 * 3] - 1) < 1e-6)
+  // Origin should be 0.6
+  // lHand index in out: Pose is 33*3=99. lHand starts at 99.
+  // First lHand x should be 0.7 - 0.6 = 0.1. (with floating point tolerance)
+  assert.ok(Math.abs(out[99] - 0.1) < 1e-5)
 })
 
 /* ---------- prediction gate ---------- */

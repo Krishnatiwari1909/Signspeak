@@ -1,15 +1,8 @@
-import { CONFIG, FEATURE_DIM, WINDOW_SIZE } from '../config.js'
+import { CONFIG, WINDOW_SIZE, NUM_LANDMARKS, COORDINATES_PER_LANDMARK } from '../config.js'
 
-// TensorFlow.js is large, so it's loaded on demand (after the UI has painted) and kept here.
-let tf = null
 
-/** Load TensorFlow.js and pick a backend: WebGL if possible, CPU otherwise. */
 export async function initBackend() {
-  tf = await import('@tensorflow/tfjs')
-  const webglOk = await tf.setBackend('webgl').catch(() => false)
-  if (!webglOk) await tf.setBackend('cpu')
-  await tf.ready()
-  return tf.getBackend()
+  return 'tfjs'
 }
 
 export async function loadLabels() {
@@ -24,86 +17,40 @@ export async function loadLabels() {
   return labels
 }
 
-/**
- * PLACEHOLDER sequential model with random weights. It exists so the whole pipeline
- * (buffer -> tensor -> inference -> smoothing -> speech) runs end to end. Its output is
- * meaningless until you replace it with a trained model (see README).
- *
- * Input:  [batch, WINDOW_SIZE, FEATURE_DIM]
- * Output: [batch, numClasses] softmax probabilities
- */
-export function buildPlaceholderModel(numClasses) {
-  const model = tf.sequential({ name: 'placeholder_sign_model' })
-  model.add(
-    tf.layers.conv1d({
-      inputShape: [WINDOW_SIZE, FEATURE_DIM],
-      filters: 64,
-      kernelSize: 3,
-      padding: 'same',
-      activation: 'relu',
-    })
-  )
-  model.add(tf.layers.maxPooling1d({ poolSize: 2 }))
-  model.add(tf.layers.lstm({ units: 64 }))
-  model.add(tf.layers.dropout({ rate: 0.3 }))
-  model.add(tf.layers.dense({ units: 64, activation: 'relu' }))
-  model.add(tf.layers.dense({ units: numClasses, activation: 'softmax' }))
-  return model
-}
-
-function sameShape(actual, expected) {
-  return actual.length === expected.length && expected.every((v, i) => actual[i] === v)
-}
-
-function validateModel(model, labels) {
-  const input = model.inputs[0].shape
-  const output = model.outputs[0].shape
-  if (!sameShape(input, [null, WINDOW_SIZE, FEATURE_DIM])) {
-    throw new Error(
-      `The model expects input shape [${input}], but this app feeds [null,${WINDOW_SIZE},${FEATURE_DIM}]. ` +
-        'Re-export the model with that input shape or change WINDOW_SIZE in src/config.js.'
-    )
-  }
-  if (output[output.length - 1] !== labels.length) {
-    throw new Error(
-      `The model outputs ${output[output.length - 1]} classes but labels.json lists ${labels.length}.`
-    )
-  }
-}
-
-/**
- * Use a trained model from /models/asl/model.json if one exists; otherwise fall back to the
- * placeholder. A trained model that is present but incompatible is an error, not a fallback.
- */
 export async function loadSignModel(labels) {
-  let model
   try {
-    model = await tf.loadLayersModel(CONFIG.modelUrl)
+    const model = await window.tf.loadLayersModel(CONFIG.modelUrl)
+    return { model, source: 'trained' }
   } catch (err) {
-    console.info(`[sign-model] No trained model at ${CONFIG.modelUrl}; using the placeholder.`, err?.message)
-    return { model: buildPlaceholderModel(labels.length), source: 'placeholder' }
+    throw new Error(`Failed to load ${CONFIG.modelUrl}: ${err?.message}`)
   }
-  validateModel(model, labels)
-  return { model, source: 'trained' }
 }
 
-/** Compile shaders / allocate buffers up front so the first real prediction isn't slow. */
 export async function warmUp(model) {
-  const out = tf.tidy(() => model.predict(tf.zeros([1, WINDOW_SIZE, FEATURE_DIM])))
-  await out.data()
+  const inputTensor = window.tf.zeros([1, WINDOW_SIZE, NUM_LANDMARKS, COORDINATES_PER_LANDMARK], 'float32')
+  const out = model.predict(inputTensor)
+  out.dataSync()
+  inputTensor.dispose()
   out.dispose()
 }
 
 /**
- * Run the model on one window (Float32Array, length WINDOW_SIZE * FEATURE_DIM).
- * `await output.data()` reads the result back asynchronously, so the render loop keeps
- * running while the GPU works.
+ * Predicts the ASL sign for a given temporal window of frames.
+ * 
+ * @param {Object} model The loaded TensorFlow.js model.
+ * @param {Float32Array} sequence A flat array containing 30 frames of 1629 features.
+ * @returns {Promise<Float32Array>} The softmax probabilities for each label.
+ * 
+ * Note: The flat sequence is reshaped into a tensor of shape [1, 30, 543, 3]
+ * ([1, WINDOW_SIZE, NUM_LANDMARKS, COORDINATES_PER_LANDMARK]) before being fed to the model.
  */
 export async function predictSequence(model, sequence) {
-  const output = tf.tidy(() => model.predict(tf.tensor3d(sequence, [1, WINDOW_SIZE, FEATURE_DIM])))
+  const inputTensor = window.tf.tensor(sequence, [1, WINDOW_SIZE, NUM_LANDMARKS, COORDINATES_PER_LANDMARK], 'float32')
+  const outputTensor = model.predict(inputTensor)
   try {
-    return await output.data()
+    return outputTensor.dataSync()
   } finally {
-    output.dispose()
+    inputTensor.dispose()
+    outputTensor.dispose()
   }
 }

@@ -1,81 +1,81 @@
-import { FEATURES_PER_HAND, LANDMARKS_PER_HAND, NUM_HANDS } from '../config.js'
-
-/*
- * Feature layout for ONE frame (Float32Array of FEATURE_DIM values):
- *
- *   [ hand slot 0 | hand slot 1 ]      slot 0 = "Left" hand, slot 1 = "Right" hand
- *
- * Each hand slot holds FEATURES_PER_HAND (65) values:
- *   0..62   21 landmarks x (x, y, z), relative to the wrist and divided by the hand's size
- *           (wrist -> middle-finger knuckle distance). This describes hand SHAPE and is
- *           invariant to where the hand is and how far it is from the camera.
- *   63..64  wrist position (x, y) in normalized image coordinates [0..1]. This keeps
- *           WHERE the sign happens, which matters for many ASL signs.
- *
- * A missing hand is all zeros. Training data must use the same convention.
- */
-
-const WRIST = 0
-const MIDDLE_FINGER_MCP = 9
-const MIN_SCALE = 1e-6
-
-function encodeHand(landmarks, out, offset, aspect) {
-  const wrist = landmarks[WRIST]
-  const ref = landmarks[MIDDLE_FINGER_MCP]
-  // MediaPipe's x and z are normalized by image width and y by image height, so scale x and z
-  // by the aspect ratio to put all three axes in the same units before measuring anything.
-  const scale = Math.max(
-    Math.hypot((ref.x - wrist.x) * aspect, ref.y - wrist.y, (ref.z - wrist.z) * aspect),
-    MIN_SCALE
-  )
-
-  let o = offset
-  for (let i = 0; i < LANDMARKS_PER_HAND; i++) {
-    const p = landmarks[i]
-    out[o++] = ((p.x - wrist.x) * aspect) / scale
-    out[o++] = (p.y - wrist.y) / scale
-    out[o++] = ((p.z - wrist.z) * aspect) / scale
-  }
-  out[o++] = wrist.x
-  out[o] = wrist.y
-}
-
-/** Decide which slot (0 or 1) each detected hand goes in. */
-function assignSlots(entries) {
-  if (entries.length === 1) return [entries[0].label === 'Right' ? 1 : 0]
-
-  const slots = entries.map((e) => (e.label === 'Left' ? 0 : 1))
-  if (slots[0] !== slots[1]) return slots
-
-  // Both hands got the same (or an unknown) label: fall back to screen position so the
-  // assignment is at least stable from frame to frame.
-  return entries[0].landmarks[WRIST].x <= entries[1].landmarks[WRIST].x ? [0, 1] : [1, 0]
-}
-
 /**
- * Encode a HandLandmarker result into `out` (length FEATURE_DIM), overwriting it.
- * @param result   HandLandmarkerResult
- * @param out      Float32Array(FEATURE_DIM), reused across frames to avoid allocations
- * @param aspect   video width / height
- * @returns        number of hands encoded (0, 1 or 2)
+ * Extracts 135 landmarks normalized relative to the shoulder midpoint (matching extract_optimized.py):
+ * 1. Pose (33)
+ * 2. Left Hand (21)
+ * 3. Right Hand (21)
+ * 4. Face (60)
+ * Total: 135 landmarks * 3 coordinates = 405 values per frame.
  */
-export function encodeFrame(result, out, aspect = 1) {
+export function encodeFrame(results, out) {
   out.fill(0)
-  const all = result?.landmarks ?? []
-  if (all.length === 0) return 0
+  if (!results) return 0
 
-  // Newer versions call this `handedness`; older ones `handednesses`.
-  const handedness = result.handedness ?? result.handednesses ?? []
-  const count = Math.min(all.length, NUM_HANDS)
+  let offset = 0
+  let handsCount = 0
 
-  const entries = []
-  for (let i = 0; i < count; i++) {
-    entries.push({ landmarks: all[i], label: handedness[i]?.[0]?.categoryName })
+  // Calculate shoulder midpoint as origin (0, 0, 0)
+  let originX = 0.5
+  let originY = 0.5
+  let originZ = 0.0
+
+  if (results.poseLandmarks && results.poseLandmarks.length >= 13) {
+    const lShoulder = results.poseLandmarks[11]
+    const rShoulder = results.poseLandmarks[12]
+    originX = (lShoulder.x + rShoulder.x) / 2.0
+    originY = (lShoulder.y + rShoulder.y) / 2.0
+    originZ = (lShoulder.z + rShoulder.z) / 2.0
   }
 
-  const slots = assignSlots(entries)
-  for (let k = 0; k < count; k++) {
-    encodeHand(entries[k].landmarks, out, slots[k] * FEATURES_PER_HAND, aspect)
+  // 1. Pose (33 landmarks)
+  if (results.poseLandmarks) {
+    for (const lm of results.poseLandmarks) {
+      out[offset++] = lm.x - originX
+      out[offset++] = lm.y - originY
+      out[offset++] = lm.z - originZ
+    }
+  } else {
+    offset += 33 * 3
   }
-  return count
+
+  // 2. Left Hand (21 landmarks)
+  if (results.leftHandLandmarks) {
+    handsCount++
+    for (const lm of results.leftHandLandmarks) {
+      out[offset++] = lm.x - originX
+      out[offset++] = lm.y - originY
+      out[offset++] = lm.z - originZ
+    }
+  } else {
+    offset += 21 * 3
+  }
+
+  // 3. Right Hand (21 landmarks)
+  if (results.rightHandLandmarks) {
+    handsCount++
+    for (const lm of results.rightHandLandmarks) {
+      out[offset++] = lm.x - originX
+      out[offset++] = lm.y - originY
+      out[offset++] = lm.z - originZ
+    }
+  } else {
+    offset += 21 * 3
+  }
+
+  // 4. Face (First 60 landmarks)
+  if (results.faceLandmarks) {
+    const count = Math.min(results.faceLandmarks.length, 60)
+    for (let i = 0; i < count; i++) {
+      const lm = results.faceLandmarks[i]
+      out[offset++] = lm.x - originX
+      out[offset++] = lm.y - originY
+      out[offset++] = lm.z - originZ
+    }
+    if (count < 60) {
+      offset += (60 - count) * 3
+    }
+  } else {
+    offset += 60 * 3
+  }
+
+  return handsCount
 }
