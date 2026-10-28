@@ -15,11 +15,11 @@ export const CONFIG = {
   minHandPresence: 0.4, // Skip inference if hands visible in <40% of frames
 
   // --- Prediction Gating ---
-  minConfidence: 0.8,
-  votesRequired: 3,
+  minConfidence: 0.6,
+  votesRequired: 2,
   cooldownMs: 1200,
   idleLabel: '_idle',
 
-  modelUrl: `${BASE_URL}models/asl/model.json?v=23`,
-  labelsUrl: `${BASE_URL}models/asl/labels.json?v=23`,
+  modelUrl: `${BASE_URL}models/asl/model.json?v=50`,
+  labelsUrl: `${BASE_URL}models/asl/labels.json?v=50`,
 }

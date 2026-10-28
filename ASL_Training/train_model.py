@@ -84,9 +84,12 @@ model.compile(
 
 model.summary()
 
+from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau, ModelCheckpoint
+
 callbacks = [
     EarlyStopping(monitor='val_accuracy', patience=15, restore_best_weights=True, verbose=1),
-    ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=5, min_lr=1e-5, verbose=1)
+    ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=5, min_lr=1e-5, verbose=1),
+    ModelCheckpoint('asl_model_checkpoint.h5', monitor='val_accuracy', save_best_only=True, verbose=1)
 ]
 
 print("\nStarting training...")
@@ -94,7 +97,7 @@ history = model.fit(
     X_train, y_train,
     validation_data=(X_val, y_val),
     epochs=80,
-    batch_size=16,
+    batch_size=32,
     class_weight=weights_dict,
     callbacks=callbacks
 )

@@ -1,75 +1,82 @@
 import os
 import cv2
 import numpy as np
-import urllib.request
 import mediapipe as mp
-from mediapipe.tasks import python
-from mediapipe.tasks.python import vision
+import multiprocessing as mp_lib
 
 WINDOW_SIZE = 30
 DATASET_DIR = 'dataset'
-MODEL_PATH = 'holistic_landmarker.task'
-MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/holistic_landmarker/holistic_landmarker/float16/latest/holistic_landmarker.task'
 
-def download_model():
-    if not os.path.exists(MODEL_PATH):
-        print(f"Downloading MediaPipe model to {MODEL_PATH}...")
-        urllib.request.urlretrieve(MODEL_URL, MODEL_PATH)
-        print("Download complete!")
+# Global variable initialized per worker process
+holistic_global = None
 
-def extract_landmarks(result):
-    """Extracts exactly 135 shoulder-centered landmarks to match features.js using the Tasks API."""
+def init_worker():
+    global holistic_global
+    # Initialize the heavy MediaPipe model once per process to save overhead
+    holistic_global = mp.solutions.holistic.Holistic(
+        static_image_mode=False,
+        model_complexity=1,
+        min_detection_confidence=0.5,
+        min_tracking_confidence=0.5
+    )
+
+def extract_landmarks(results):
+    """Extracts exactly 135 shoulder-centered landmarks using Solutions API."""
     frame_data = np.zeros((135, 3), dtype=np.float32)
     idx = 0
 
     # Calculate shoulder midpoint as origin (0, 0, 0)
     origin_x, origin_y, origin_z = 0.5, 0.5, 0.0
-    if result.pose_landmarks and len(result.pose_landmarks) >= 13:
-        l_shoulder = result.pose_landmarks[11]
-        r_shoulder = result.pose_landmarks[12]
+    if results.pose_landmarks and len(results.pose_landmarks.landmark) >= 13:
+        l_shoulder = results.pose_landmarks.landmark[11]
+        r_shoulder = results.pose_landmarks.landmark[12]
         origin_x = (l_shoulder.x + r_shoulder.x) / 2.0
         origin_y = (l_shoulder.y + r_shoulder.y) / 2.0
         origin_z = (l_shoulder.z + r_shoulder.z) / 2.0
 
     # 1. Pose (33 landmarks)
-    if result.pose_landmarks:
-        for lm in result.pose_landmarks:
+    if results.pose_landmarks:
+        for lm in results.pose_landmarks.landmark:
             frame_data[idx] = [lm.x - origin_x, lm.y - origin_y, lm.z - origin_z]
             idx += 1
     else:
         idx += 33
 
     # 2. Left Hand (21 landmarks)
-    if result.left_hand_landmarks:
-        for lm in result.left_hand_landmarks:
+    if results.left_hand_landmarks:
+        for lm in results.left_hand_landmarks.landmark:
             frame_data[idx] = [lm.x - origin_x, lm.y - origin_y, lm.z - origin_z]
             idx += 1
     else:
         idx += 21
 
     # 3. Right Hand (21 landmarks)
-    if result.right_hand_landmarks:
-        for lm in result.right_hand_landmarks:
+    if results.right_hand_landmarks:
+        for lm in results.right_hand_landmarks.landmark:
             frame_data[idx] = [lm.x - origin_x, lm.y - origin_y, lm.z - origin_z]
             idx += 1
     else:
         idx += 21
 
     # 4. Face (First 60 landmarks)
-    if result.face_landmarks:
-        count = min(len(result.face_landmarks), 60)
+    if results.face_landmarks:
+        count = min(len(results.face_landmarks.landmark), 60)
         for i in range(count):
-            lm = result.face_landmarks[i]
+            lm = results.face_landmarks.landmark[i]
             frame_data[idx] = [lm.x - origin_x, lm.y - origin_y, lm.z - origin_z]
             idx += 1
         if count < 60:
-            idx += (60 - count)  # Ensure idx always reaches 135
+            idx += (60 - count)
     else:
         idx += 60
 
     return frame_data
 
-def process_video(video_path, landmarker):
+def worker_process_video(args):
+    """Worker function to process a single video using the process-global model."""
+    video_path, class_name = args
+    global holistic_global
+    
     cap = cv2.VideoCapture(video_path)
     sequence = []
     
@@ -78,78 +85,75 @@ def process_video(video_path, landmarker):
         if not ret:
             break
         
-        # Hard lock to 640x480 to prevent segmentation calculator mismatch
-        frame = cv2.resize(frame, (640, 480), interpolation=cv2.INTER_AREA)
         image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=image)
+        image.flags.writeable = False
+        results = holistic_global.process(image)
         
-        result = landmarker.detect(mp_image)
-        sequence.append(extract_landmarks(result))
+        sequence.append(extract_landmarks(results))
         
     cap.release()
 
     sequence = np.array(sequence, dtype=np.float32)
     if len(sequence) == 0:
-        return np.zeros((WINDOW_SIZE, 135, 3), dtype=np.float32)
-
-    # Uniform temporal resample across the entire video duration
-    if len(sequence) < WINDOW_SIZE:
+        seq = np.zeros((WINDOW_SIZE, 135, 3), dtype=np.float32)
+    elif len(sequence) < WINDOW_SIZE:
         pad = np.zeros((WINDOW_SIZE - len(sequence), 135, 3), dtype=np.float32)
-        sequence = np.vstack([sequence, pad])
+        seq = np.vstack([sequence, pad])
     else:
         indices = np.linspace(0, len(sequence) - 1, WINDOW_SIZE, dtype=int)
-        sequence = sequence[indices]
+        seq = sequence[indices]
 
-    return sequence
-
-def augment_sequence(seq):
-    """Generates synthetic variations: scale, joint jitter, and time shifts."""
-    # 1. Random spatial scaling (simulates standing closer or further)
-    scale = np.random.uniform(0.9, 1.1)
-    augmented = seq * scale
-
-    # 2. Gaussian joint jitter
-    noise = np.random.normal(0, 0.005, size=augmented.shape).astype(np.float32)
-    augmented += noise
+    # Generate outputs
+    out_seqs = [seq]
+    out_labels = [class_name]
     
-    return augmented
+    if class_name != '_idle':
+        # Apply augmentation directly here
+        scale = np.random.uniform(0.9, 1.1)
+        augmented = seq * scale
+        noise = np.random.normal(0, 0.005, size=augmented.shape).astype(np.float32)
+        augmented += noise
+        
+        out_seqs.append(augmented)
+        out_labels.append(class_name)
+        
+    return out_seqs, out_labels
 
 def main():
-    download_model()
-    
     classes = sorted([d for d in os.listdir(DATASET_DIR) if os.path.isdir(os.path.join(DATASET_DIR, d))])
     print(f"Classes ({len(classes)}): {classes}")
-
-    base_options = python.BaseOptions(model_asset_path=MODEL_PATH)
-    options = vision.HolisticLandmarkerOptions(
-        base_options=base_options,
-        running_mode=vision.RunningMode.IMAGE
-    )
-
-    X, y = [], []
-    with vision.HolisticLandmarker.create_from_options(options) as landmarker:
-        for class_idx, class_name in enumerate(classes):
-            class_path = os.path.join(DATASET_DIR, class_name)
-            videos = [v for v in os.listdir(class_path) if v.endswith('.mp4')]
-            print(f"[{class_idx+1}/{len(classes)}] Extracting {class_name} ({len(videos)} videos)...")
+    
+    tasks = []
+    for class_name in classes:
+        class_path = os.path.join(DATASET_DIR, class_name)
+        videos = [v for v in os.listdir(class_path) if v.endswith('.mp4')]
+        for v in videos:
+            tasks.append((os.path.join(class_path, v), class_name))
             
-            for v in videos:
-                seq = process_video(os.path.join(class_path, v), landmarker)
-                X.append(seq)
-                y.append(class_name)
-                
-                # Apply data augmentation only to action classes, not neutral _idle
-                if class_name != '_idle':
-                    X.append(augment_sequence(seq))
-                    y.append(class_name)
+    print(f"Total videos to process: {len(tasks)}")
+    
+    X, y = [], []
+    
+    # Use 10 cores out of 12 to leave the system perfectly responsive
+    num_cores = max(1, mp_lib.cpu_count() - 2)
+    print(f"Starting multiprocessing pool with {num_cores} workers...")
+    
+    with mp_lib.Pool(processes=num_cores, initializer=init_worker) as pool:
+        for i, (out_seqs, out_labels) in enumerate(pool.imap_unordered(worker_process_video, tasks)):
+            X.extend(out_seqs)
+            y.extend(out_labels)
+            
+            if (i + 1) % 50 == 0 or (i + 1) == len(tasks):
+                print(f"Processed {i + 1}/{len(tasks)} videos...")
 
     X = np.array(X, dtype=np.float32)
     y = np.array(y)
 
     print(f"\nExtraction complete. Total sequences: {X.shape[0]}")
-    print(f"X shape: {X.shape}, y shape: {y.shape}")
     np.save('X.npy', X)
     np.save('y.npy', y)
 
 if __name__ == '__main__':
+    # Required for Windows multiprocessing
+    mp_lib.freeze_support()
     main()
