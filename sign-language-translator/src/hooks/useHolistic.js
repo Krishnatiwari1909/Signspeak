@@ -1,4 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
+import * as mpHolistic from '@mediapipe/holistic'
+
+// Support CommonJS/ESM bundled by Vite, or window fallback
+const HolisticClass = mpHolistic.Holistic || mpHolistic.default?.Holistic || window.Holistic
 
 export function useHolistic() {
   const holisticRef = useRef(null)
@@ -9,9 +13,14 @@ export function useHolistic() {
 
     async function init() {
       try {
-        const holistic = new window.Holistic({
+        const H = HolisticClass || window.Holistic
+        if (!H) {
+          throw new Error('Holistic class is not available.')
+        }
+
+        const holistic = new H({
           locateFile: (file) => {
-            return `https://cdn.jsdelivr.net/npm/@mediapipe/holistic/${file}`
+            return `/mediapipe/holistic/${file}`
           },
         })
 
