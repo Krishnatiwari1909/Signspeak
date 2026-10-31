@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useEffect, useRef } from 'react'
 
 // --- Components ---
 import CameraStage from './components/CameraStage.jsx'
@@ -48,7 +48,22 @@ export default function App() {
     onPrediction: translator.onPrediction,
   })
 
-  const lastWord = translator.words[translator.words.length - 1] ?? null
+  // Keyboard shortcut: Spacebar triggers sentence translation in sentence mode
+  useEffect(() => {
+    function handleKeyDown(e) {
+      if (e.code === 'Space' && e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+        e.preventDefault()
+        translator.finishSentence()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [translator.finishSentence])
+
+  const lastCaption =
+    translator.mode === 'sentence' && translator.activeGlosses.length > 0
+      ? translator.activeGlosses.join(' + ')
+      : translator.words[translator.words.length - 1] ?? null
 
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-6 px-4 py-6 sm:px-6 lg:py-10">
@@ -76,13 +91,25 @@ export default function App() {
           <CameraStage
             canvasRef={canvasRef}
             message={stageMessage(camera, holistic, signModel)}
-            caption={lastWord}
+            caption={lastCaption}
           />
           <WindowStrip statsRef={statsRef} />
         </section>
 
         <div className="flex flex-col gap-8">
-          <TranslationPanel words={translator.words} speech={translator.speech} onClear={translator.clear} />
+          <TranslationPanel
+            mode={translator.mode}
+            onModeChange={translator.setMode}
+            words={translator.words}
+            sentences={translator.sentences}
+            activeGlosses={translator.activeGlosses}
+            isTranslating={translator.isTranslating}
+            onFinishSentence={translator.finishSentence}
+            apiKey={translator.apiKey}
+            onApiKeyChange={translator.setApiKey}
+            speech={translator.speech}
+            onClear={translator.clear}
+          />
           <PipelineDetails
             statsRef={statsRef}
             modelInfo={{ source: signModel.source, backend: signModel.backend }}

@@ -25,11 +25,11 @@ export function useHolistic() {
         })
 
         holistic.setOptions({
-          modelComplexity: 1,
+          modelComplexity: 0,
           smoothLandmarks: true,
           enableSegmentation: false,
-          smoothSegmentation: true,
-          refineFaceLandmarks: true,
+          smoothSegmentation: false,
+          refineFaceLandmarks: false,
           minDetectionConfidence: 0.5,
           minTrackingConfidence: 0.5,
         })

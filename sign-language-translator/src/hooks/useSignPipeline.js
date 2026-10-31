@@ -89,8 +89,24 @@ export function useSignPipeline({
       ctx.save()
       ctx.clearRect(0, 0, canvas.width, canvas.height)
       ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height)
-      // Note: We skip drawing the landmarks here as the focus is on the feature extraction pipeline
-      // and we uninstalled tasks-vision (DrawingUtils).
+
+      // Lightweight hand landmark dots for real-time visual tracking feedback
+      if (results.leftHandLandmarks) {
+        ctx.fillStyle = '#38bdf8'
+        for (const lm of results.leftHandLandmarks) {
+          ctx.beginPath()
+          ctx.arc(lm.x * canvas.width, lm.y * canvas.height, 3.5, 0, 2 * Math.PI)
+          ctx.fill()
+        }
+      }
+      if (results.rightHandLandmarks) {
+        ctx.fillStyle = '#34d399'
+        for (const lm of results.rightHandLandmarks) {
+          ctx.beginPath()
+          ctx.arc(lm.x * canvas.width, lm.y * canvas.height, 3.5, 0, 2 * Math.PI)
+          ctx.fill()
+        }
+      }
       
       const hands = encodeFrame(results, frame)
       buffer.push(frame, hands > 0)

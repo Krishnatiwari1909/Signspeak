@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 
 const CONSTRAINTS = {
   video: {
-    width: { ideal: 640 },
-    height: { ideal: 480 },
-    frameRate: { ideal: 30 },
+    width: { ideal: 640, max: 640 },
+    height: { ideal: 480, max: 480 },
+    frameRate: { ideal: 30, max: 30 },
     facingMode: 'user',
   },
   audio: false,
