@@ -48,17 +48,22 @@ export default function App() {
     onPrediction: translator.onPrediction,
   })
 
-  // Keyboard shortcut: Spacebar triggers sentence translation in sentence mode
+  // Keyboard shortcuts: Spacebar triggers sentence translation, Backspace removes last sign
   useEffect(() => {
     function handleKeyDown(e) {
-      if (e.code === 'Space' && e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
+
+      if (e.code === 'Space') {
         e.preventDefault()
         translator.finishSentence()
+      } else if (e.code === 'Backspace') {
+        e.preventDefault()
+        translator.removeLastGloss()
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [translator.finishSentence])
+  }, [translator.finishSentence, translator.removeLastGloss])
 
   const lastCaption =
     translator.mode === 'sentence' && translator.activeGlosses.length > 0
@@ -103,6 +108,8 @@ export default function App() {
             words={translator.words}
             sentences={translator.sentences}
             activeGlosses={translator.activeGlosses}
+            onRemoveGloss={translator.removeGloss}
+            onRemoveLastGloss={translator.removeLastGloss}
             isTranslating={translator.isTranslating}
             onFinishSentence={translator.finishSentence}
             apiKey={translator.apiKey}
