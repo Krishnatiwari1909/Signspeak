@@ -11,8 +11,6 @@ export default function TranslationPanel({
   words,
   sentences,
   activeGlosses,
-  onRemoveGloss,
-  onRemoveLastGloss,
   isTranslating,
   onFinishSentence,
   apiKey,
@@ -113,24 +111,14 @@ export default function TranslationPanel({
                 Active Signs Queue ({activeGlosses.length})
               </span>
               {activeGlosses.length > 0 && (
-                <div className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={onRemoveLastGloss}
-                    className="rounded-lg bg-dusk-800 px-2.5 py-1 text-xs font-medium text-mist hover:text-white hover:bg-dusk-700 transition-colors"
-                    title="Undo last sign (or press Backspace)"
-                  >
-                    Undo
-                  </button>
-                  <button
-                    type="button"
-                    onClick={onFinishSentence}
-                    disabled={isTranslating}
-                    className="rounded-lg bg-cyan-700 px-3 py-1 font-semibold text-white hover:bg-cyan-600 transition-colors"
-                  >
-                    {isTranslating ? 'Translating...' : 'Translate Now (Space)'}
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={onFinishSentence}
+                  disabled={isTranslating}
+                  className="rounded-lg bg-cyan-700 px-3 py-1 font-semibold text-white hover:bg-cyan-600 transition-colors"
+                >
+                  {isTranslating ? 'Translating...' : 'Translate Now (or pause)'}
+                </button>
               )}
             </div>
 
@@ -143,17 +131,9 @@ export default function TranslationPanel({
                 {activeGlosses.map((g, idx) => (
                   <span
                     key={idx}
-                    className="group inline-flex items-center gap-1.5 rounded-lg bg-cyan-950 px-2.5 py-1 font-mono text-sm font-semibold text-cyan-200 border border-cyan-700/50"
+                    className="inline-flex items-center rounded-lg bg-cyan-950 px-2.5 py-1 font-mono text-sm font-semibold text-cyan-200 border border-cyan-700/50"
                   >
-                    <span>{g}</span>
-                    <button
-                      type="button"
-                      onClick={() => onRemoveGloss?.(idx)}
-                      className="text-cyan-400/60 hover:text-red-400 transition-colors text-xs ml-0.5"
-                      title="Remove this sign"
-                    >
-                      ✕
-                    </button>
+                    {g}
                   </span>
                 ))}
                 {isTranslating && (

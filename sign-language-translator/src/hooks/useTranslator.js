@@ -112,19 +112,6 @@ export function useTranslator() {
     })
   )
 
-  // Remove a specific gloss or last gloss (e.g. on Backspace or click)
-  const removeGloss = useCallback((indexToRemove) => {
-    activeGlossesRef.current = activeGlossesRef.current.filter((_, idx) => idx !== indexToRemove)
-    setActiveGlosses([...activeGlossesRef.current])
-  }, [])
-
-  const removeLastGloss = useCallback(() => {
-    if (activeGlossesRef.current.length > 0) {
-      activeGlossesRef.current = activeGlossesRef.current.slice(0, -1)
-      setActiveGlosses([...activeGlossesRef.current])
-    }
-  }, [])
-
   /** prediction: { label, confidence, probs } | null */
   const onPrediction = useCallback(
     (prediction, now) => {
@@ -135,13 +122,9 @@ export function useTranslator() {
 
       gate.update(confident ? prediction.label : null, prediction?.confidence ?? 0, now)
 
-      // In sentence mode: if hands are resting or idle, start the sentence completion timer.
-      // If the user starts signing actively again, clear the idle timer so it doesn't trigger prematurely.
+      // In sentence mode: if hands are resting or idle, start the sentence completion timer
       if (modeRef.current === 'sentence' && activeGlossesRef.current.length > 0) {
-        if (confident && idleTimerRef.current) {
-          clearTimeout(idleTimerRef.current)
-          idleTimerRef.current = null
-        } else if (!confident && !idleTimerRef.current) {
+        if (!confident && !idleTimerRef.current) {
           idleTimerRef.current = setTimeout(() => {
             finishSentence()
           }, IDLE_SENTENCE_TIMEOUT_MS)
@@ -170,8 +153,6 @@ export function useTranslator() {
     words,
     sentences,
     activeGlosses,
-    removeGloss,
-    removeLastGloss,
     isTranslating,
     finishSentence,
     threshold,

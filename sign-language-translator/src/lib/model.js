@@ -46,7 +46,7 @@ export async function predictSequence(model, sequence) {
   const inputTensor = tf.tensor(sequence, [1, WINDOW_SIZE, NUM_LANDMARKS, COORDINATES_PER_LANDMARK], 'float32')
   const outputTensor = model.predict(inputTensor)
   try {
-    return outputTensor.dataSync()
+    return await outputTensor.data()
   } finally {
     inputTensor.dispose()
     outputTensor.dispose()

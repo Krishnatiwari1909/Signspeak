@@ -20,6 +20,6 @@ export const CONFIG = {
   cooldownMs: 700,      // 700ms cooldown (down from 1200ms) for natural sentence pacing
   idleLabel: '_idle',
 
-  modelUrl: `${BASE_URL}models/asl/model.json?v=50`,
-  labelsUrl: `${BASE_URL}models/asl/labels.json?v=50`,
+  modelUrl: `${BASE_URL}models/asl/model.json?v=100`,
+  labelsUrl: `${BASE_URL}models/asl/labels.json?v=100`,
 }
