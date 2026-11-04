@@ -49,22 +49,34 @@ export default function App() {
     onPrediction: translator.onPrediction,
   })
 
-  // Keyboard shortcut: Spacebar triggers sentence translation in sentence mode
+  // Keyboard shortcuts: Space/Enter translates sentence, Backspace undos last sign
   useEffect(() => {
     function handleKeyDown(e) {
-      if (e.code === 'Space' && e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
+
+      if (e.code === 'Space' || e.code === 'Enter') {
         e.preventDefault()
         translator.finishSentence()
+      } else if (e.code === 'Backspace' && translator.mode === 'sentence') {
+        e.preventDefault()
+        translator.undoLastSign()
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [translator.finishSentence])
+  }, [translator.finishSentence, translator.undoLastSign, translator.mode])
+
+  const lastSentence = translator.sentences[translator.sentences.length - 1]
+  const lastWord = translator.words[translator.words.length - 1]
 
   const lastCaption =
-    translator.mode === 'sentence' && translator.activeGlosses.length > 0
-      ? translator.activeGlosses.join(' + ')
-      : translator.words[translator.words.length - 1] ?? null
+    translator.mode === 'sentence'
+      ? translator.activeGlosses.length > 0
+        ? { id: `active-${translator.activeGlosses.length}`, text: translator.activeGlosses.join(' + ') }
+        : lastSentence
+          ? { id: `s-${lastSentence.id}`, text: lastSentence.text }
+          : null
+      : lastWord ?? null
 
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-6 px-4 py-6 sm:px-6 lg:py-10">
@@ -108,8 +120,10 @@ export default function App() {
             words={translator.words}
             sentences={translator.sentences}
             activeGlosses={translator.activeGlosses}
+            countdown={translator.countdown}
             isTranslating={translator.isTranslating}
             onFinishSentence={translator.finishSentence}
+            onUndoLastSign={translator.undoLastSign}
             apiKey={translator.apiKey}
             onApiKeyChange={translator.setApiKey}
             speech={translator.speech}

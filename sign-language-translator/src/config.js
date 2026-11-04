@@ -20,8 +20,9 @@ export const AVAILABLE_MODELS = {
     modelUrl: `${BASE_URL}models/gislr/model.onnx`,
     labelsUrl: `${BASE_URL}models/gislr/labels.json`,
     idleLabel: null,
-    minConfidence: 0.35,
-    minHandPresence: 0.30,
+    minConfidence: 0.40, // Decisive threshold for 250 classes (uniform chance is 0.4%)
+    minMargin: 0.06,     // Required margin between top-1 and top-2 candidate
+    minHandPresence: 0.35, // 35% of frames have hand visible
     votesRequired: 2,
     cooldownMs: 800,
     inferenceStride: 3,
@@ -39,6 +40,7 @@ export const AVAILABLE_MODELS = {
     labelsUrl: `${BASE_URL}models/asl/labels.json?v=100`,
     idleLabel: '_idle',
     minConfidence: 0.45,
+    minMargin: 0.08,
     minHandPresence: 0.35,
     votesRequired: 2,
     cooldownMs: 700,
@@ -50,5 +52,6 @@ export const DEFAULT_MODEL_ID = 'gislr'
 
 export const CONFIG = {
   sampleIntervalMs: 33, // Target ~30Hz sampling
+  autoTranslateDelayMs: 3500, // 3.5 seconds pause before auto-translating full sentence
   ...AVAILABLE_MODELS[DEFAULT_MODEL_ID],
 }

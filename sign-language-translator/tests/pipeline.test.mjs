@@ -4,7 +4,7 @@ import { FEATURE_DIM, NUM_LANDMARKS, WINDOW_SIZE } from '../src/config.js'
 import { encodeFrame } from '../src/lib/features.js'
 import { FrameBuffer } from '../src/lib/FrameBuffer.js'
 import { createPredictionGate } from '../src/lib/predictionGate.js'
-import { argmax, prettyLabel, topK } from '../src/lib/predictions.js'
+import { argmax, prettyLabel, topK, top2Margin } from '../src/lib/predictions.js'
 
 /* ---------- helpers ---------- */
 
@@ -166,4 +166,12 @@ test('argmax, topK and prettyLabel', () => {
   assert.deepEqual(topK(probs, ['A', 'B', 'C'], 2).map((g) => g.label), ['B', 'C'])
   assert.equal(prettyLabel('THANK_YOU'), 'Thank you')
   assert.equal(prettyLabel(''), '')
+})
+
+test('top2Margin finds top 2 candidates and margin', () => {
+  const probs = new Float32Array([0.1, 0.6, 0.3])
+  const res = top2Margin(probs)
+  assert.equal(res.best, 1)
+  assert.equal(res.second, 2)
+  assert.ok(Math.abs(res.margin - 0.3) < 1e-5)
 })
