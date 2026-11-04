@@ -35,3 +35,4 @@ keras_h5_conversion.save_keras_model(model, target_tfjs_dir)
 # Copy labels.json to frontend models folder
 shutil.copy('labels.json', os.path.join(target_tfjs_dir, 'labels.json'))
 print("Successfully deployed 101-class model and labels to frontend public/models/asl/!")
+

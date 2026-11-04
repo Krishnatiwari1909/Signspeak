@@ -10,6 +10,7 @@ __pycache__/
 asl_env/
 venv/
 env/
+ASL_Training/gislr_model/
 
 # Video processing
 videos/

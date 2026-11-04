@@ -22,7 +22,7 @@ function stageMessage(camera, holistic, signModel) {
   }
   if (camera.status !== 'ready') return { tone: 'loading', text: 'Starting the camera...' }
   if (holistic.status !== 'ready') return { tone: 'loading', text: 'Loading holistic tracking...' }
-  if (signModel.status !== 'ready') return { tone: 'loading', text: 'Loading the sign model...' }
+  if (signModel.status !== 'ready') return { tone: 'loading', text: `Loading ${signModel.activeConfig?.name ?? 'sign model'}...` }
   return null
 }
 
@@ -33,7 +33,7 @@ export default function App() {
   const camera = useCamera()
   const holistic = useHolistic()
   const signModel = useSignModel()
-  const translator = useTranslator()
+  const translator = useTranslator(signModel.activeConfig)
 
   const ready =
     camera.status === 'ready' && holistic.status === 'ready' && signModel.status === 'ready'
@@ -44,6 +44,7 @@ export default function App() {
     holisticRef: holistic.holisticRef,
     modelRef: signModel.modelRef,
     labelsRef: signModel.labelsRef,
+    activeConfig: signModel.activeConfig,
     enabled: ready,
     onPrediction: translator.onPrediction,
   })
@@ -84,6 +85,10 @@ export default function App() {
         cameraStatus={camera.status}
         holisticStatus={holistic.status}
         signModelStatus={signModel.status}
+        modelId={signModel.modelId}
+        onSwitchModel={signModel.switchModel}
+        availableModels={signModel.availableModels}
+        signModelSource={signModel.source}
       />
 
       <main className="grid items-start gap-8 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">

@@ -1,25 +1,54 @@
 // Central ML and application configuration. Times are in milliseconds.
 const BASE_URL = import.meta.env?.BASE_URL ?? '/'
 
-// --- Machine Learning Tensor Shapes ---
-// Holistic: Face (60) + LeftHand (21) + Pose (33) + RightHand (21) = 135 landmarks
+// --- Conversational Model Tensor Constants (used in unit tests and standard baseline) ---
 export const NUM_LANDMARKS = 135
 export const COORDINATES_PER_LANDMARK = 3 // (x, y, z)
 export const FEATURE_DIM = NUM_LANDMARKS * COORDINATES_PER_LANDMARK // 405 floats per frame
-export const WINDOW_SIZE = 30 // Frames in the rolling temporal window (~1 s at 30 fps)
+export const WINDOW_SIZE = 30 // Frames in temporal window (~1 s at 30 fps)
+
+export const AVAILABLE_MODELS = {
+  gislr: {
+    id: 'gislr',
+    name: 'Google 250 Words (GISLR 1st Place)',
+    shortName: 'Google 250 Signs',
+    description: '250 ASL signs from Google Kaggle competition with 1D-CNN + Transformer architecture.',
+    type: 'onnx',
+    numLandmarks: 543,
+    featureDim: 543 * 3, // 1629 floats per frame
+    windowSize: 30, // 30 frames (~1 sec)
+    modelUrl: `${BASE_URL}models/gislr/model.onnx`,
+    labelsUrl: `${BASE_URL}models/gislr/labels.json`,
+    idleLabel: null,
+    minConfidence: 0.35,
+    minHandPresence: 0.30,
+    votesRequired: 2,
+    cooldownMs: 800,
+    inferenceStride: 3,
+  },
+  conversational: {
+    id: 'conversational',
+    name: 'Top 100 Conversational (Custom Bi-GRU)',
+    shortName: 'Conversational 100',
+    description: '100 high-utility daily conversational signs + _idle class, ultra-lightweight 817 KB.',
+    type: 'tfjs',
+    numLandmarks: 135,
+    featureDim: 135 * 3, // 405 floats per frame
+    windowSize: 30,
+    modelUrl: `${BASE_URL}models/asl/model.json?v=100`,
+    labelsUrl: `${BASE_URL}models/asl/labels.json?v=100`,
+    idleLabel: '_idle',
+    minConfidence: 0.45,
+    minHandPresence: 0.35,
+    votesRequired: 2,
+    cooldownMs: 700,
+    inferenceStride: 3,
+  },
+}
+
+export const DEFAULT_MODEL_ID = 'gislr'
 
 export const CONFIG = {
-  // --- Pipeline Sampling ---
   sampleIntervalMs: 33, // Target ~30Hz sampling
-  inferenceStride: 3,   // Run model every 3 frames (~10 inferences per sec for fast motion)
-  minHandPresence: 0.35, // Skip inference if hands visible in <35% of frames (more forgiving)
-
-  // --- Prediction Gating ---
-  minConfidence: 0.45,  // Responsive threshold (45% vs 60%) to catch fast/informal signs
-  votesRequired: 2,     // 2 consecutive agreeing inferences
-  cooldownMs: 700,      // 700ms cooldown (down from 1200ms) for natural sentence pacing
-  idleLabel: '_idle',
-
-  modelUrl: `${BASE_URL}models/asl/model.json?v=100`,
-  labelsUrl: `${BASE_URL}models/asl/labels.json?v=100`,
+  ...AVAILABLE_MODELS[DEFAULT_MODEL_ID],
 }

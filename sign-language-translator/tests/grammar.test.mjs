@@ -13,7 +13,16 @@ test('synthesizeLocalSentence formats single signs cleanly', () => {
   assert.equal(synthesizeLocalSentence(['HELP']), 'Please help me.')
   assert.equal(synthesizeLocalSentence(['HELLO']), 'Hello!')
   assert.equal(synthesizeLocalSentence(['THANK_YOU']), 'Thank you!')
+  assert.equal(synthesizeLocalSentence(['THANKYOU']), 'Thank you!')
+  assert.equal(synthesizeLocalSentence(['BYE']), 'Goodbye!')
   assert.equal(synthesizeLocalSentence(['COMPUTER']), 'Computer.')
+})
+
+test('synthesizeLocalSentence handles Google GISLR 250 vocabulary', () => {
+  assert.equal(synthesizeLocalSentence(['CAT', 'DRINK', 'MILK']), 'The cat drinks milk.')
+  assert.equal(synthesizeLocalSentence(['WEUS', 'EAT', 'PIZZA']), 'We eat pizza.')
+  assert.equal(synthesizeLocalSentence(['HESHEIT', 'LIKE', 'ICECREAM']), 'He/she likes ice cream.')
+  assert.equal(synthesizeLocalSentence(['DOG', 'CHAIR']), 'The dog needs the chair.')
 })
 
 test('synthesizeLocalSentence deduplicates adjacent repetitions', () => {

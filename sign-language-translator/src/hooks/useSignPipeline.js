@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { CONFIG, FEATURE_DIM, WINDOW_SIZE } from '../config.js'
+import { CONFIG, WINDOW_SIZE } from '../config.js'
 import { encodeFrame } from '../lib/features.js'
 import { FrameBuffer } from '../lib/FrameBuffer.js'
 import { predictSequence } from '../lib/model.js'
@@ -22,12 +22,12 @@ export function useSignPipeline({
   holisticRef,
   modelRef,
   labelsRef,
+  activeConfig = CONFIG,
   enabled,
   onPrediction,
 }) {
   const statsRef = useRef(createStats())
   const bufferRef = useRef(null)
-
 
   const onPredictionRef = useRef(onPrediction)
   useEffect(() => {
@@ -42,9 +42,11 @@ export function useSignPipeline({
     const ctx = canvas.getContext('2d')
     const stats = statsRef.current
 
-    const buffer = new FrameBuffer(WINDOW_SIZE, FEATURE_DIM)
+    const windowSize = activeConfig.windowSize || WINDOW_SIZE
+    const featureDim = activeConfig.featureDim
+    const buffer = new FrameBuffer(windowSize, featureDim)
     bufferRef.current = buffer
-    const frame = new Float32Array(FEATURE_DIM)
+    const frame = new Float32Array(featureDim)
 
     let rafId = 0
     let disposed = false
@@ -57,9 +59,9 @@ export function useSignPipeline({
       inferring = true
       const startedAt = performance.now()
       try {
-        const model = modelRef.current
-        if (!model) return
-        const probs = await predictSequence(model, buffer.snapshot())
+        const modelMeta = modelRef.current
+        if (!modelMeta) return
+        const probs = await predictSequence(modelMeta, buffer.snapshot(), activeConfig)
         if (disposed) return
 
         const ms = performance.now() - startedAt
@@ -108,14 +110,17 @@ export function useSignPipeline({
         }
       }
       
-      const hands = encodeFrame(results, frame)
+      const hands = encodeFrame(results, frame, activeConfig.type)
       buffer.push(frame, hands > 0)
       stats.handsVisible = hands
       buffer.timeline(stats.timeline)
 
       framesSinceInference++
-      if (buffer.isFull && framesSinceInference >= CONFIG.inferenceStride) {
-        if (buffer.presenceRatio() < CONFIG.minHandPresence) {
+      const stride = activeConfig.inferenceStride || CONFIG.inferenceStride
+      const minPresence = activeConfig.minHandPresence ?? CONFIG.minHandPresence
+
+      if (buffer.isFull && framesSinceInference >= stride) {
+        if (buffer.presenceRatio() < minPresence) {
           framesSinceInference = 0
           onPredictionRef.current?.(null, performance.now())
         } else if (!inferring && modelRef.current) {
@@ -145,7 +150,7 @@ export function useSignPipeline({
             canvas.height = video.videoHeight
           }
 
-          // Trigger asynchronous processing
+          // Trigger asynchronous MediaPipe processing
           await holistic.send({ image: video })
         }
       }
@@ -160,7 +165,7 @@ export function useSignPipeline({
       cancelAnimationFrame(rafId)
       ctx.clearRect(0, 0, canvas.width, canvas.height)
     }
-  }, [enabled, videoRef, canvasRef, holisticRef, modelRef, labelsRef])
+  }, [enabled, videoRef, canvasRef, holisticRef, modelRef, labelsRef, activeConfig])
 
   return { statsRef }
 }

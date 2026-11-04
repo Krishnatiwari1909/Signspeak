@@ -11,13 +11,13 @@ const IDLE_SENTENCE_TIMEOUT_MS = 1400
 /**
  * Turns model predictions into real-time words or complete, grammatically-correct sentences.
  */
-export function useTranslator() {
+export function useTranslator(activeConfig = CONFIG) {
   const speech = useSpeech()
   const [mode, setMode] = useState('sentence') // 'sentence' | 'live'
   const [words, setWords] = useState([]) // [{ id, text }]
   const [sentences, setSentences] = useState([]) // [{ id, text, glosses }]
   const [activeGlosses, setActiveGlosses] = useState([]) // Current in-progress sentence glosses
-  const [threshold, setThreshold] = useState(CONFIG.minConfidence)
+  const [threshold, setThreshold] = useState(activeConfig.minConfidence ?? CONFIG.minConfidence)
   const [apiKey, setApiKey] = useState('')
   const [isTranslating, setIsTranslating] = useState(false)
 
@@ -25,9 +25,15 @@ export function useTranslator() {
   const thresholdRef = useRef(threshold)
   const speakRef = useRef(speech.speak)
   const apiKeyRef = useRef(apiKey)
+  const activeConfigRef = useRef(activeConfig)
   const activeGlossesRef = useRef([])
   const nextId = useRef(0)
   const idleTimerRef = useRef(null)
+
+  useEffect(() => {
+    activeConfigRef.current = activeConfig
+    setThreshold(activeConfig.minConfidence ?? CONFIG.minConfidence)
+  }, [activeConfig])
 
   useEffect(() => {
     modeRef.current = mode
@@ -82,8 +88,8 @@ export function useTranslator() {
 
   const [gate] = useState(() =>
     createPredictionGate({
-      votesRequired: CONFIG.votesRequired,
-      cooldownMs: CONFIG.cooldownMs,
+      votesRequired: activeConfig.votesRequired ?? CONFIG.votesRequired,
+      cooldownMs: activeConfig.cooldownMs ?? CONFIG.cooldownMs,
       onCommit: (label) => {
         const text = prettyLabel(label)
         const id = nextId.current++
@@ -115,9 +121,10 @@ export function useTranslator() {
   /** prediction: { label, confidence, probs } | null */
   const onPrediction = useCallback(
     (prediction, now) => {
+      const idleLabel = activeConfigRef.current?.idleLabel
       const confident =
         prediction &&
-        prediction.label !== CONFIG.idleLabel &&
+        (!idleLabel || prediction.label !== idleLabel) &&
         prediction.confidence >= thresholdRef.current
 
       gate.update(confident ? prediction.label : null, prediction?.confidence ?? 0, now)
