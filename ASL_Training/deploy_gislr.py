@@ -30,3 +30,4 @@ with open(dst_labels, "w") as f:
     json.dump(labels, f, indent=2)
 
 print(f"Saved labels.json to {dst_labels}")
+

@@ -23,3 +23,4 @@ realistic[:, 489:522, :] = 0.5 # pose
 realistic[:, 522:543, :] = 0.5 # right hand
 out_real = session.run([output_name], {input_name: realistic})[0]
 print("Realistic output finite:", np.all(np.isfinite(out_real)), "Top 3:", np.argsort(out_real)[-3:][::-1])
+

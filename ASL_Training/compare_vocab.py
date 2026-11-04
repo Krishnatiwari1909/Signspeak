@@ -9,3 +9,4 @@ with open(r"C:\Foundational Project sem 5\sign-language-translator\public\models
 # Inspect what roles are needed
 print(f"GISLR labels: {len(gislr_labels)}")
 print(f"ASL labels: {len(asl_labels)}")
+

@@ -45,3 +45,4 @@ with open(map_path, "r") as f:
     sign_map = json.load(f)
 print(f"Total vocabulary classes: {len(sign_map)}")
 print("First 10 words:", list(sign_map.keys())[:10])
+

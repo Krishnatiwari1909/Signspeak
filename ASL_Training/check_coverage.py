@@ -247,3 +247,4 @@ existing = {
 all_covered = set(existing).union(ROLES.keys())
 still_missing = [w for w in gislr_words if w.upper() not in all_covered]
 print("Still missing from GISLR 250:", len(still_missing), still_missing)
+

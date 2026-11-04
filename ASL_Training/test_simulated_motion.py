@@ -39,3 +39,4 @@ print("Probabilities (softmax):")
 probs = np.exp(res - np.max(res)) / np.sum(np.exp(res - np.max(res)))
 for i in top5:
     print(f"  {labels[i]}: {probs[i]:.4f}")
+

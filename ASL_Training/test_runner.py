@@ -15,3 +15,4 @@ res = runner(inputs=dummy_input)
 out = res["outputs"]
 print("Inference successful! Output shape:", out.shape)
 print("Top 5 prediction indices:", np.argsort(out)[-5:][::-1])
+

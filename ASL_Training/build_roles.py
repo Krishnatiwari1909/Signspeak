@@ -20,3 +20,4 @@ existing_keys = {
 missing = [w for w in gislr_words if w.upper() not in existing_keys]
 print(f"GISLR words to add to WORD_ROLES: {len(missing)}")
 print("First 30 missing words:", missing[:30])
+

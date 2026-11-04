@@ -10,3 +10,4 @@ print("Labels with non-standard naming:")
 for w in labels:
     if not w.islower():
         print(f"  {w}")
+

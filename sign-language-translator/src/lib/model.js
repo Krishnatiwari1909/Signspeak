@@ -1,9 +1,9 @@
 import * as tf from '@tensorflow/tfjs'
 import * as ort from 'onnxruntime-web'
 
-// Configure ONNX Runtime Web: point WASM loader to /wasm/
+// Configure ONNX Runtime Web: point WASM loader to CDN
 if (typeof window !== 'undefined') {
-  ort.env.wasm.wasmPaths = '/wasm/'
+  ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.1/dist/'
   // Single thread execution for universal browser compatibility (avoids SharedArrayBuffer COOP/COEP requirement)
   ort.env.wasm.numThreads = 1
 }
@@ -31,7 +31,14 @@ export async function loadLabels(modelConfig) {
 export async function loadSignModel(modelConfig) {
   if (modelConfig.type === 'onnx') {
     try {
-      const session = await ort.InferenceSession.create(modelConfig.modelUrl, {
+      // Fetch binary model buffer directly to avoid ORT path resolution quirks
+      const res = await fetch(modelConfig.modelUrl)
+      if (!res.ok) {
+        throw new Error(`Failed to fetch model binary from ${modelConfig.modelUrl} (HTTP ${res.status})`)
+      }
+      const modelBuffer = await res.arrayBuffer()
+
+      const session = await ort.InferenceSession.create(modelBuffer, {
         executionProviders: ['wasm'],
         graphOptimizationLevel: 'all',
       })
